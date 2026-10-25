@@ -106,6 +106,9 @@ async function AdminDashboardContent() {
             );
           })}
         </div>
+        <Link href="/admin/curriculum">
+  Open Curriculum Studio
+</Link>
 
         <Link
           href="/profile"
