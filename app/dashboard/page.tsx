@@ -4,166 +4,370 @@ import Link from "next/link";
 import { connection } from "next/server";
 
 import {
+  ArrowRight,
   BookOpen,
+  CheckCircle2,
+  Coins,
   Compass,
   GraduationCap,
+  LogOut,
+  Map as MapIcon,
+  Play,
   Sparkles,
+  Trophy,
+  UserRound,
 } from "lucide-react";
 
 import { requireAccount } from "@/lib/auth/roles";
 import { signOutAction } from "@/lib/auth/actions";
+import { getLearnerLearningStateAction } from
+  "@/lib/learn/progress-actions";
 
-/**
- * ACELINGUA V2
- * Phase 2 — Protected Learner Dashboard
- *
- * Authentication must execute at request time.
- * This prevents Next.js 16 from prerendering
- * Supabase's time-dependent session verification.
- */
 async function LearnerDashboardContent() {
-  // Fix: Wait for an actual incoming request before
-  // executing Supabase authentication.
   await connection();
 
-  // Verify the user and require the learner role.
-  // Unauthenticated users go to /login.
-  // Admin users go to /admin.
   const account = await requireAccount("learner");
+  const response = await getLearnerLearningStateAction();
+
+  if (!response.ok) {
+    throw new Error(response.error);
+  }
+
+  const { lessons, xp, coins } = response.data;
+
+  const totalCourses = new Set(
+    lessons.map((item) => item.courseId)
+  ).size;
+
+  const completedLessons = lessons.filter(
+    (item) => item.completed
+  ).length;
+
+  const nextLesson =
+    lessons.find(
+      (item) => item.unlocked && !item.completed
+    ) ?? null;
+
+  const reviewLesson =
+    lessons.find((item) => item.completed) ?? null;
+
+  const featuredLesson = nextLesson ?? reviewLesson;
+
+  const nextHref = featuredLesson
+    ? `/learn/published/${encodeURIComponent(
+        featuredLesson.lessonId
+      )}`
+    : "/learn/published";
+
+  const stats = [
+    {
+      label: "Available Courses",
+      value: totalCourses,
+      icon: GraduationCap,
+      color: "bg-[#f0edff] text-[#3558AE]",
+    },
+    {
+      label: "Published Lessons",
+      value: lessons.length,
+      icon: BookOpen,
+      color: "bg-[#edf8ff] text-[#3558AE]",
+    },
+    {
+      label: "Completed Lessons",
+      value: completedLessons,
+      icon: Trophy,
+      color: "bg-[#fff1f6] text-[#B64074]",
+    },
+    {
+      label: "Total XP",
+      value: xp,
+      icon: Sparkles,
+      color: "bg-[#f0edff] text-[#3558AE]",
+    },
+    {
+      label: "Coins",
+      value: coins,
+      icon: Coins,
+      color: "bg-[#fff1f6] text-[#B64074]",
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#f9f2ff] via-[#e6f7ff] to-[#fff0e9] px-5 py-8 text-[#2A255C] md:px-10">
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3"
+          >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#3558AE] text-white">
-              <BookOpen />
+              <BookOpen size={24} />
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold">
+              <h1 className="text-2xl font-extrabold">
                 ACElingua
               </h1>
-
               <p className="text-xs text-slate-500">
                 Learn. Speak. Explore.
               </p>
             </div>
-          </div>
+          </Link>
 
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="rounded-xl border border-white bg-white/80 px-5 py-3 font-semibold transition hover:bg-white"
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-2 rounded-xl border border-white bg-white/80 px-4 py-3 text-sm font-bold text-[#3558AE] hover:bg-white"
             >
-              Sign Out
-            </button>
-          </form>
+              <UserRound size={18} />
+              My Profile
+            </Link>
+
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-xl border border-white bg-white/80 px-4 py-3 text-sm font-bold hover:bg-white"
+              >
+                <LogOut size={18} />
+                Sign Out
+              </button>
+            </form>
+          </div>
         </header>
 
-        <section className="mt-10 rounded-[30px] border border-white/80 bg-white/85 p-8 shadow-sm">
-          <div className="flex flex-wrap items-start gap-5">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f0edff] text-[#3558AE]">
-              <GraduationCap size={32} />
-            </div>
+        <section className="mt-10 rounded-[30px] border border-white bg-white/90 p-7 shadow-sm md:p-9">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#3558AE]">
+            <Compass size={17} />
+            Your Learning Adventure
+          </p>
 
-            <div className="flex-1">
-              <p className="text-sm font-bold text-[#3558AE]">
-                YOUR LEARNING ADVENTURE
-              </p>
+          <h2 className="mt-4 text-3xl font-extrabold md:text-4xl">
+            Welcome back, {account.displayName || "Explorer"}!
+          </h2>
 
-              <h2 className="mt-2 text-3xl font-bold">
-                Hello, {account.displayName || "Explorer"}!
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            Build your language skills, complete published
+            lessons, and collect rewards as you progress.
+          </p>
+
+          <div className="mt-7 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+
+              return (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-[#f0ecfa] bg-white p-5"
+                >
+                  <div
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl ${stat.color}`}
+                  >
+                    <Icon size={21} />
+                  </div>
+
+                  <p className="mt-4 text-3xl font-extrabold tabular-nums">
+                    {stat.value}
+                  </p>
+
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    {stat.label}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mt-7 rounded-3xl bg-[#2A255C] p-7 text-white shadow-sm md:p-9">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#d6ccff]">
+            <Sparkles size={17} />
+            Continue Your Adventure
+          </p>
+
+          {featuredLesson ? (
+            <>
+              <h2 className="mt-4 text-2xl font-extrabold">
+                {featuredLesson.courseTitle}
               </h2>
 
-              <p className="mt-3 text-slate-500">
-                Your learner account is authenticated and protected.
-                Courses, lessons, and progress will be connected
-                in the upcoming development phases.
+              <p className="mt-2 text-sm text-[#ddd5f9]">
+                Unit {featuredLesson.unitNumber} ·{" "}
+                {featuredLesson.unitTitle}
               </p>
-            </div>
+
+              <div className="mt-6 rounded-2xl border border-white/20 bg-white/10 p-5">
+                <p className="text-xs font-bold uppercase text-[#d8d0ff]">
+                  {featuredLesson.completed
+                    ? "Completed Lesson"
+                    : "Next Available Lesson"}
+                </p>
+
+                <h3 className="mt-2 text-xl font-extrabold">
+                  {featuredLesson.lessonTitle}
+                </h3>
+
+                {featuredLesson.completed ? (
+                  <p className="mt-2 flex items-center gap-2 text-sm text-green-200">
+                    <CheckCircle2 size={17} />
+                    Completed · Score {featuredLesson.score ?? 0}%
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-[#ddd5f9]">
+                    Ready for your next learning adventure.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="mt-4 text-2xl font-extrabold">
+                More lessons are coming soon!
+              </h2>
+              <p className="mt-3 text-sm text-white/80">
+                Your available lessons will appear here
+                when they are published.
+              </p>
+            </>
+          )}
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href={nextHref}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-extrabold text-[#3558AE] hover:bg-[#f0edff]"
+            >
+              <Play size={17} />
+              {nextLesson
+                ? "Continue Learning"
+                : featuredLesson
+                  ? "Review Lesson"
+                  : "Explore Courses"}
+              <ArrowRight size={17} />
+            </Link>
+
+            <Link
+              href="/learn/published"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-6 py-3 text-sm font-bold text-white hover:bg-white/20"
+            >
+              <MapIcon size={18} />
+              Course Roadmap
+            </Link>
           </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl bg-[#f5f3ff] p-5">
-              <BookOpen className="text-[#3558AE]" />
-
-              <h3 className="mt-4 font-bold">
-                Learn
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-                Interactive language courses
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#edf8ff] p-5">
-              <Compass className="text-[#3558AE]" />
-
-              <h3 className="mt-4 font-bold">
-                Explore
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-                Travel through learning worlds
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#fff1f6] p-5">
-              <Sparkles className="text-[#B64074]" />
-
-              <h3 className="mt-4 font-bold">
-                Earn
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-                Unlock achievements and rewards
-              </p>
-            </div>
-          </div>
-
-          <Link
-            href="/profile"
-            className="mt-8 inline-block rounded-xl bg-[#3558AE] px-6 py-3 font-semibold text-white transition hover:bg-[#2A255C]"
-          >
-            My Profile
-          </Link>
         </section>
+
+        <section className="mt-10">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-extrabold">
+                Your Published Lessons
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Actual progress from your learner account.
+              </p>
+            </div>
+
+            <Link
+              href="/learn/published"
+              className="inline-flex items-center gap-2 text-sm font-bold text-[#3558AE] hover:underline"
+            >
+              View Roadmap
+              <ArrowRight size={17} />
+            </Link>
+          </div>
+
+          {lessons.length === 0 ? (
+            <div className="mt-6 rounded-2xl bg-white p-8 text-center text-sm text-slate-600">
+              No published lessons are available yet.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {lessons.slice(0, 6).map((lesson) => (
+                <article
+                  key={lesson.lessonId}
+                  className="flex flex-col rounded-2xl border border-white bg-white/95 p-6 shadow-sm"
+                >
+                  <div
+                    className={
+                      "flex h-12 w-12 items-center justify-center rounded-xl " +
+                      (lesson.completed
+                        ? "bg-green-100 text-green-700"
+                        : "bg-[#f0edff] text-[#3558AE]")
+                    }
+                  >
+                    {lesson.completed ? (
+                      <CheckCircle2 size={23} />
+                    ) : (
+                      <BookOpen size={23} />
+                    )}
+                  </div>
+
+                  <p className="mt-5 text-xs font-bold uppercase text-[#3558AE]">
+                    {lesson.courseTitle}
+                  </p>
+
+                  <h3 className="mt-2 text-lg font-extrabold">
+                    {lesson.lessonTitle}
+                  </h3>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    {lesson.unitTitle}
+                  </p>
+
+                  <p className="mt-3 text-xs font-semibold text-[#3558AE]">
+                    {lesson.completed
+                      ? `Completed · ${lesson.score ?? 0}%`
+                      : lesson.unlocked
+                        ? "Available to Start"
+                        : "Locked"}
+                  </p>
+
+                  <div className="mt-auto border-t border-slate-100 pt-5">
+                    {lesson.unlocked ? (
+                      <Link
+                        href={`/learn/published/${encodeURIComponent(
+                          lesson.lessonId
+                        )}`}
+                        className="inline-flex items-center gap-2 text-sm font-bold text-[#3558AE] hover:underline"
+                      >
+                        {lesson.completed ? "Review" : "Open Lesson"}
+                        <ArrowRight size={17} />
+                      </Link>
+                    ) : (
+                      <span className="text-xs font-semibold text-slate-500">
+                        Complete earlier lessons to unlock.
+                      </span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <footer className="mt-12 text-center text-xs text-slate-500">
+          ACElingua · Learn. Speak. Explore.
+        </footer>
       </div>
     </main>
   );
 }
 
-/**
- * Static loading screen displayed while the
- * authenticated dashboard is being rendered.
- */
 function DashboardLoading() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#f9f2ff] via-[#e6f7ff] to-[#fff0e9] px-6">
+    <main className="flex min-h-screen items-center justify-center bg-[#f9f2ff] px-6">
       <div
         role="status"
-        className="w-full max-w-sm rounded-3xl border border-white bg-white p-8 text-center shadow-lg"
+        className="rounded-3xl bg-white p-8 text-center shadow-sm"
       >
         <div className="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-[#3558AE]/20 border-t-[#3558AE]" />
-
-        <h1 className="text-xl font-bold text-[#2A255C]">
-          Loading your adventure...
-        </h1>
-
-        <p className="mt-3 text-sm text-slate-500">
-          Checking your learner account and preparing
-          your dashboard.
+        <p className="font-bold text-[#2A255C]">
+          Loading your learning progress...
         </p>
       </div>
     </main>
   );
 }
 
-/**
- * Suspense is required for request-time rendering
- * with Next.js 16 Cache Components.
- */
 export default function DashboardPage() {
   return (
     <Suspense fallback={<DashboardLoading />}>

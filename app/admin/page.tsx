@@ -1,151 +1,138 @@
-
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-
-import {
-  BookOpen,
-  GraduationCap,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
-
 import { requireAccount } from "@/lib/auth/roles";
-import { signOutAction } from "@/lib/auth/actions";
-
-const modules = [
-  {
-    title: "Language Management",
-    description: "Manage supported learning languages.",
-    icon: BookOpen,
-  },
-  {
-    title: "Course Management",
-    description: "Build and publish learning content.",
-    icon: GraduationCap,
-  },
-  {
-    title: "User Management",
-    description: "Manage learners and authorized staff.",
-    icon: Users,
-  },
-];
-
-async function AdminDashboardContent() {
-  // Explicitly wait for an HTTP request.
+import { createClient } from "@/lib/supabase/server";
+import { lessonHref } from "@/lib/admin/navigation";
+function hasRelatedRows(value: unknown): boolean { return Array.isArray(value) ? value.length > 0 : value !== null && typeof value === "object" && "id" in value; }
+const card = "rounded-2xl border border-white bg-white/90 p-5 shadow-sm";
+async function Overview() {
   await connection();
-
-  // Verify the current user against Supabase.
   const account = await requireAccount("admin");
-
-  return (
-    <main className="min-h-screen bg-slate-50 p-5 text-[#2A255C] md:p-10">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold text-[#3558AE]">
-              ACELINGUA V2
-            </p>
-
-            <h1 className="mt-2 text-3xl font-bold">
-              Admin Dashboard
-            </h1>
-          </div>
-
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-medium transition hover:bg-slate-100"
-            >
-              Sign Out
-            </button>
-          </form>
-        </header>
-
-        <section className="mt-8 rounded-3xl bg-gradient-to-r from-[#2A255C] to-[#3558AE] p-8 text-white">
-          <ShieldCheck size={32} />
-
-          <h2 className="mt-4 text-2xl font-bold">
-            Welcome, {account.displayName || "Administrator"}!
-          </h2>
-
-          <p className="mt-3 text-sm text-white/80">
-            Your administrator role has been verified by Supabase.
-          </p>
-
-          <p className="mt-2 text-xs text-white/70">
-            Role: {account.role}
-          </p>
-        </section>
-
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
-          {modules.map((module) => {
-            const Icon = module.icon;
-
-            return (
-              <div
-                key={module.title}
-                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-              >
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#f0edff] text-[#3558AE]">
-                  <Icon size={23} />
-                </div>
-
-                <h3 className="font-bold">
-                  {module.title}
-                </h3>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  {module.description}
-                </p>
-
-                <p className="mt-5 text-xs font-semibold text-[#3558AE]">
-                  Management tools coming in Phase 3+
-                </p>
-              </div>
-            );
-          })}
-        </div>
-        <Link href="/admin/curriculum">
-  Open Curriculum Studio
-</Link>
-
-        <Link
-          href="/profile"
-          className="mt-8 inline-block rounded-xl bg-[#3558AE] px-6 py-3 font-semibold text-white transition hover:bg-[#2A255C]"
-        >
-          Manage My Profile
-        </Link>
-      </div>
-    </main>
-  );
-}
-
-function AdminDashboardLoading() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <div
-        role="status"
-        className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-lg"
-      >
-        <div className="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-[#3558AE]/20 border-t-[#3558AE]" />
-
-        <h1 className="text-xl font-bold text-[#2A255C]">
-          Loading Admin Dashboard...
+  const db = await createClient();
+  const [languages, courses, units, lessons, drafts, snapshots, recent, curriculum, attention] = await Promise.all([
+    db.from("languages").select("id", { count: "exact", head: true }).eq("is_active", true),
+    db.from("courses").select("id", { count: "exact", head: true }),
+    db.from("units").select("id", { count: "exact", head: true }),
+    db.from("lessons").select("id", { count: "exact", head: true }),
+    db.from("lessons").select("id", { count: "exact", head: true }).eq("status", "draft"),
+    db.from("published_lesson_snapshots").select("lesson_id", { count: "exact", head: true }).eq("status", "published"),
+    db.from("published_lesson_snapshots").select("lesson_id, lesson_title, course_title, published_at").eq("status", "published").order("published_at", { ascending: false }).limit(6),
+    db.from("courses").select("id, title, status, units(id, lessons(id))").order("title").limit(8),
+    db.from("lessons").select("id, title, lesson_steps(id), ai_assessment_drafts(id)").eq("status", "draft").order("id").limit(12),
+  ]);
+  const errors = [languages, courses, units, lessons, drafts, snapshots, recent, curriculum, attention].filter(result => result.error);
+  const stats = [["Active languages", languages], ["Courses", courses], ["Units", units], ["Lessons", lessons], ["Draft lessons", drafts], ["Published snapshots", snapshots]] as const;
+  return <main className="space-y-8">
+    <header className="flex flex-wrap items-center justify-between gap-5">
+      <div>
+        <h1 className="text-3xl font-extrabold">Welcome, {account.displayName || "Administrator"}
         </h1>
-
-        <p className="mt-3 text-sm text-slate-500">
-          Preparing your management workspace.
-        </p>
+        <p className="mt-3 text-slate-600">Your curriculum and publishing overview.</p>
       </div>
-    </main>
-  );
+      <Link href="/admin/curriculum" className="rounded-xl bg-[#3558AE] px-5 py-3 font-bold text-white hover:bg-[#2A255C]">Open Curriculum Studio &rarr;</Link>
+    </header>
+    {!!errors.length && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Some dashboard data could not be loaded. Unavailable counts show N/A. Refresh to retry.</p>}
+    <section aria-label="Platform statistics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {stats.map(([label, result]) => <article key={label} className={card}>
+        <p className="text-sm font-semibold text-slate-600">
+          {label}
+        </p>
+        <p className="mt-3 text-3xl font-extrabold tabular-nums">
+          {result.error ? "N/A" : result.count ?? 0}
+        </p>
+      </article>)}
+    </section>
+    <section>
+      <h2 className="mb-4 text-xl font-bold">Quick actions</h2>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[["lesson-editor", "Continue Editing Lessons"], ["review", "Review Content"], ["activities", "Manage Activities"]].map(([slug, label]) => <Link key={slug} href={lessonHref(slug)} className={card + " font-bold text-[#3558AE] hover:bg-[#eeeafd]"}>
+          {label} &rarr;</Link>)}
+      </div>
+    </section>
+    <section className={card}>
+      <h2 className="text-xl font-bold">Curriculum progress</h2>
+      <p className="mt-2 text-sm text-slate-500">First eight courses by title. Draft status and published snapshots are tracked separately.</p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="p-3">Course</th>
+              <th className="p-3">Units</th>
+              <th className="p-3">Lessons</th>
+              <th className="p-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(curriculum.data ?? []).map(course => <tr key={course.id} className="border-b border-slate-100">
+              <td className="p-3">
+                <Link className="font-semibold text-[#3558AE] hover:underline" href={lessonHref("roadmap", null, { course: course.id })}>
+                  {course.title}
+                </Link>
+              </td>
+              <td className="p-3">
+                {course.units.length}
+              </td>
+              <td className="p-3">
+                {course.units.reduce((sum, unit) => sum + unit.lessons.length, 0)}
+              </td>
+              <td className="p-3 capitalize">
+                {course.status}
+              </td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      {!curriculum.data?.length && <p className="mt-4 text-sm text-slate-500">
+        {curriculum.error ? "Course overview unavailable." : "No courses yet. Start in Curriculum Studio."}
+      </p>}
+    </section>
+    <div className="grid gap-6 xl:grid-cols-2">
+      <section className={card}>
+        <h2 className="text-xl font-bold">Action required</h2>
+        <p className="mt-2 text-sm text-slate-500">Sample of the first 12 drafts by ID; open Review for full readiness checks.</p>
+        <ul className="mt-4 space-y-3">
+          {(attention.data ?? []).map(item => {
+            const missingContent = !item.lesson_steps.length; const missingAssessment = !hasRelatedRows(item.ai_assessment_drafts); return <li key={item.id}>
+              <Link href={lessonHref(missingContent ? "lesson-ai" : missingAssessment ? "assessment-ai" : "review", item.id)} className="block rounded-xl bg-[#f4f1ff] p-3 hover:bg-[#eeeafd]">
+                <p className="font-semibold">
+                  {item.title}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {missingContent ? "No teaching steps saved" : missingAssessment ? "No assessment draft saved" : "Draft available for review"}
+                </p>
+              </Link>
+            </li>;
+          })}
+        </ul>
+        {!attention.data?.length && <p className="mt-4 text-sm text-slate-500">
+          {attention.error ? "Attention queue unavailable." : "No draft lessons to review."}
+        </p>}
+      </section>
+      <section className={card}>
+        <h2 className="text-xl font-bold">Recently published lessons</h2>
+        <ul className="mt-4 space-y-3">
+          {(recent.data ?? []).map(item => <li key={item.lesson_id} className="rounded-xl bg-[#f4f1ff] p-3">
+            <Link href={lessonHref("publish", item.lesson_id)} className="font-semibold text-[#3558AE] hover:underline">
+              {item.lesson_title}
+            </Link>
+            <p className="mt-1 text-sm text-slate-600">
+              {item.course_title}
+            </p>
+            <time className="text-xs text-slate-500" dateTime={item.published_at}>
+              {new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(item.published_at))}
+            </time>
+          </li>)}
+        </ul>
+        {!recent.data?.length && <p className="mt-4 text-sm text-slate-500">
+          {recent.error ? "Publication history unavailable." : "No published snapshots yet."}
+        </p>}
+      </section>
+    </div>
+  </main>;
 }
-
 export default function AdminPage() {
-  return (
-    <Suspense fallback={<AdminDashboardLoading />}>
-      <AdminDashboardContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<p role="status">Loading Admin overview...</p>}>
+    <Overview />
+  </Suspense>;
 }

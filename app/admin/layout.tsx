@@ -2,6 +2,8 @@
 import { Suspense, type ReactNode } from "react";
 import { connection } from "next/server";
 
+import AdminShell from "@/components/admin/AdminShell";
+import "./admin.css";
 import { requireAccount } from "@/lib/auth/roles";
 
 type Props = {
@@ -15,7 +17,7 @@ async function AdminAccessGate({ children }: Props) {
   // Only verified administrators can access this portal.
   await requireAccount("admin");
 
-  return <>{children}</>;
+  return <AdminShell>{children}</AdminShell>;
 }
 
 function AdminLoading() {

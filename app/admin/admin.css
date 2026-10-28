@@ -1,0 +1,32 @@
+.admin-shell {
+  color-scheme: light;
+}
+
+.admin-shell main,
+.admin-shell section,
+.admin-shell form {
+  min-width: 0;
+}
+
+.admin-shell :is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid #3558ae;
+  outline-offset: 3px;
+}
+
+.admin-shell button:not(:disabled) {
+  cursor: pointer;
+}
+
+.admin-shell :is(input, textarea, select) {
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *,
+  .admin-shell *::before,
+  .admin-shell *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

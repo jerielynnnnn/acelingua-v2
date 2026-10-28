@@ -1,305 +1,72 @@
-
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-
-import {
-  ArrowLeft,
-  BookOpen,
-  ClipboardCheck,
-  FileSpreadsheet,
-  FolderOpen,
-  Gamepad2,
-  Globe2,
-  Layers3,
-  ListChecks,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
-
 import { requireAccount } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { activityTypes } from "@/lib/curriculum/activity-types";
-
-const contentTables = [
-  {
-    table: "languages",
-    label: "Languages",
-    icon: Globe2,
-  },
-  {
-    table: "courses",
-    label: "Courses",
-    icon: BookOpen,
-  },
-  {
-    table: "units",
-    label: "Units",
-    icon: Layers3,
-  },
-  {
-    table: "lessons",
-    label: "Lessons",
-    icon: FolderOpen,
-  },
-  {
-    table: "questions",
-    label: "Questions",
-    icon: ListChecks,
-  },
-  {
-    table: "lesson_activities",
-    label: "Activities",
-    icon: Gamepad2,
-  },
-  {
-    table: "assessments",
-    label: "Assessments",
-    icon: ClipboardCheck,
-  },
-] as const;
-
-const studioSections = [
-  {
-    label: "Course Builder",
-    description:
-      "Create languages, courses, units, and ordered lessons.",
-    icon: BookOpen,
-    stage: "Phase 3B",
-  },
-  {
-    label: "Activity Builder",
-    description:
-      "Configure matching, flip cards, listening, and more.",
-    icon: Gamepad2,
-    stage: "Phase 3B",
-  },
-  {
-    label: "Bulk Curriculum Import",
-    description:
-      "Validate and import Excel, CSV, or JSON lesson content.",
-    icon: FileSpreadsheet,
-    stage: "Phase 3C",
-  },
-  {
-    label: "Assessment Builder",
-    description:
-      "Build placement tests, unit reviews, and final exams.",
-    icon: ClipboardCheck,
-    stage: "Phase 3B",
-  },
-  {
-    label: "Preview & Publish",
-    description:
-      "Review the learner experience before releasing content.",
-    icon: Sparkles,
-    stage: "Phase 3D",
-  },
-] as const;
-
-async function CurriculumStudioContent() {
+import { lessonHref, studioGroups, validLessonId } from "@/lib/admin/navigation";
+async function Studio({ searchParams }: {
+  searchParams: Promise<{
+    lesson?: string;
+  }>;
+}) {
   await connection();
-
-  const account = await requireAccount("admin");
-  const supabase = await createClient();
-
-  const counts = await Promise.all(
-    contentTables.map(async (item) => {
-      const { count, error } = await supabase
-        .from(item.table)
-        .select("id", {
-          count: "exact",
-          head: true,
-        });
-
-      if (error) {
-        throw new Error(
-          `Unable to load ${item.label}: ${error.message}`
-        );
-      }
-
-      return {
-        ...item,
-        count: count ?? 0,
-      };
-    })
-  );
-
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-[#f9f2ff] via-[#e6f7ff] to-[#fff0e9] px-5 py-9 text-[#2A255C] md:px-10">
-      <div className="mx-auto max-w-6xl">
-        <Link
-          href="/admin"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#3558AE] hover:underline"
-        >
-          <ArrowLeft size={17} />
-          Admin Dashboard
-        </Link>
-
-        <header className="mt-9">
-          <div className="flex items-center gap-2 text-sm font-bold text-[#3558AE]">
-            <ShieldCheck size={19} />
-            ACELINGUA V2 · ADMIN
-          </div>
-
-          <h1 className="mt-4 text-4xl font-extrabold">
-            Curriculum Studio
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-slate-600">
-            Organize your languages, courses, lessons,
-            interactive activities, and assessments
-            in one connected learning system.
-          </p>
-
-          <p className="mt-4 text-xs text-slate-500">
-            Administrator:
-            {" "}
-            {account.displayName || "Admin"}
-          </p>
-        </header>
-
-        <section className="mt-10">
-          <h2 className="text-xl font-bold">
-            Curriculum Overview
-          </h2>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Live record counts from Supabase.
-          </p>
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {counts.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <article
-                  key={item.table}
-                  className="rounded-2xl border border-white bg-white/90 p-5 shadow-sm"
-                >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#efedff] text-[#3558AE]">
-                    <Icon size={21} />
-                  </div>
-
-                  <p className="mt-5 text-3xl font-extrabold">
-                    {item.count}
-                  </p>
-
-                  <p className="mt-1 text-sm font-semibold text-slate-600">
-                    {item.label}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="mt-12">
-          <h2 className="text-xl font-bold">
-            Content Creation Tools
-          </h2>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Upcoming tools in our Phase 3 development sequence.
-          </p>
-
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
-            {studioSections.map((section) => {
-              const Icon = section.icon;
-
-              return (
-                <article
-                  key={section.label}
-                  className="rounded-3xl border border-white bg-white/90 p-6 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#efedff] text-[#3558AE]">
-                      <Icon size={24} />
-                    </div>
-
-                    <span className="rounded-full bg-[#f4f1ff] px-3 py-1 text-xs font-semibold text-[#3558AE]">
-                      {section.stage}
-                    </span>
-                  </div>
-
-                  <h3 className="mt-5 text-xl font-bold">
-                    {section.label}
-                  </h3>
-
-                  <p className="mt-3 text-sm leading-relaxed text-slate-500">
-                    {section.description}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="mt-12 rounded-3xl border border-white bg-white/90 p-6 shadow-sm md:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold">
-                Supported Activity Types
-              </h2>
-
-              <p className="mt-2 text-sm text-slate-500">
-                These definitions will power the visual
-                activity editor and learner lesson engine.
+  await requireAccount("admin");
+  const { lesson: requestedLesson } = await searchParams;
+  let lesson: string | undefined;
+  if (validLessonId(requestedLesson)) {
+    const db = await createClient();
+    const { data, error } = await db.from("lessons").select("id").eq("id", requestedLesson).maybeSingle();
+    if (error) throw new Error(error.message);
+    lesson = data?.id;
+  }
+  return <main>
+    <Link href="/admin" className="text-sm font-semibold text-[#3558AE]">Back to Dashboard</Link>
+    <header className="my-7">
+      <h1 className="text-3xl font-extrabold">Curriculum Studio</h1>
+      <p className="mt-3 text-slate-600">Create a curriculum, build lesson experiences, then review and publish approved content.</p>
+    </header>
+    <div className="grid gap-6 xl:grid-cols-2">
+      {studioGroups.map(group => <section key={group.title} className="rounded-3xl border border-white bg-white/85 p-6 shadow-sm">
+        <h2 className="text-xl font-bold">
+          {group.title}
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          {group.description}
+        </p>
+        <ul className="mt-5 space-y-3">
+          {group.tools.map(([slug, title, description]) => <li key={slug}>
+            {["approve", "publish", "lesson-preview"].includes(slug) && !validLessonId(lesson) ? <div className="rounded-xl bg-slate-50 p-4">
+              <p className="font-bold">
+                {title}
               </p>
-            </div>
-
-            <span className="rounded-full bg-[#f0edff] px-4 py-2 text-sm font-bold text-[#3558AE]">
-              {activityTypes.length} Types
-            </span>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {activityTypes.map((activity) => (
-              <article
-                key={activity.id}
-                className="rounded-2xl border border-slate-100 bg-[#fafaff] p-4"
-              >
-                <div className="flex items-center gap-2">
-                  <Gamepad2 size={18} className="text-[#3558AE]" />
-
-                  <h3 className="text-sm font-bold">
-                    {activity.label}
-                  </h3>
-                </div>
-
-                <p className="mt-3 text-xs leading-relaxed text-slate-500">
-                  {activity.description}
-                </p>
-
-                <p className="mt-3 text-xs font-semibold capitalize text-[#3558AE]">
-                  {activity.category}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <div className="mt-9 rounded-2xl border border-[#dcd7fb] bg-white/80 p-5 text-sm text-[#3558AE]">
-          Phase 3A establishes the structure. The next
-          step is the interactive course and activity editor.
-        </div>
-      </div>
-    </main>
-  );
+              <p className="mt-1 text-sm text-slate-500">Select a lesson in <Link href="/admin/curriculum/review" className="text-[#3558AE] underline">Curriculum Review</Link> first.</p>
+            </div> : <Link href={lessonHref(slug, lesson)} className="block rounded-xl border border-[#C7A9D4]/25 p-4 transition-colors hover:bg-[#eeeafd]">
+              <h3 className="font-bold text-[#3558AE]">
+                {title} &rarr;</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                {description}
+              </p>
+            </Link>}
+          </li>)}
+        </ul>
+      </section>)}
+    </div>
+    <details className="mt-6 rounded-2xl border border-white bg-white/80 p-5">
+      <summary className="cursor-pointer font-bold">Registered activity formats ({activityTypes.length})</summary>
+      <p className="mt-3 text-sm text-slate-600">The visual Activity Builder supports flip cards, matching, multiple choice, and word order. Other registered formats may require the content tools.</p>
+      <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {activityTypes.map(activity => <li key={activity.id} className="rounded-xl bg-[#f4f1ff] p-3"><h3 className="font-semibold">{activity.label}</h3><p className="mt-1 text-sm text-slate-600">{activity.description}</p></li>)}
+      </ul>
+    </details>
+  </main>;
 }
-
-export default function CurriculumStudioPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-screen items-center justify-center bg-[#f9f2ff]">
-          <p className="text-sm font-medium text-[#3558AE]">
-            Loading Curriculum Studio...
-          </p>
-        </main>
-      }
-    >
-      <CurriculumStudioContent />
-    </Suspense>
-  );
+export default function CurriculumPage(props: {
+  searchParams: Promise<{
+    lesson?: string;
+  }>;
+}) {
+  return <Suspense fallback={<p role="status">Loading Curriculum Studio...</p>}>
+    <Studio {...props} />
+  </Suspense>;
 }

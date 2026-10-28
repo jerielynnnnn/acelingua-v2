@@ -60,6 +60,7 @@ function AuthenticationLoading() {
 /**
  * Suspense allows the authentication check to
  * run dynamically while displaying a loading UI.
+ * 
  */
 export default function ContinuePage() {
   return (
