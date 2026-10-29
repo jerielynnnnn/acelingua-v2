@@ -94,7 +94,7 @@ function LanguageBubble({ language }: { language: (typeof languages)[number] }) 
 
   return (
 
-    <Link href="/languages" className={`ace-scene__bubble ace-scene__bubble--${language.theme}`}
+    <Link href="" className={`ace-scene__bubble ace-scene__bubble--${language.theme}`}
 
       aria-label={`Explore ${language.name}`}>
 
@@ -206,6 +206,18 @@ function InteractiveAceCard() {
 
       </div>
 
+      {/* Attached to the ACE card, without affecting its 3D tilt. */}
+      <Link
+        href="/onboarding"
+        className="ace-scene__get-started"
+        aria-label="Get started with ACELINGUA — choose a language"
+      >
+        <span>Get Started</span>
+        <span className="ace-scene__get-started-icon" aria-hidden="true">
+          <Arrow />
+        </span>
+      </Link>
+
     </div>
 
   );
@@ -238,7 +250,7 @@ function LandingHero() {
 
         </div>
 
-        <Link href="/onboarding/languages" className="ace-scene__explore">View Languages <Arrow /></Link>
+        <Link href="/onboarding" className="ace-scene__explore">View Languages <Arrow /></Link>
 
       </div>
 
@@ -809,7 +821,7 @@ export default function HomePage() {
           <nav className="ace-footer__nav" aria-label="Footer navigation">
             <div className="ace-footer__nav-group">
               <h3>EXPLORE</h3>
-              <Link href="/languages">Languages</Link>
+              <Link href="">Languages</Link>
               <Link href="/#how-it-works">How it works</Link>
               <Link href="/#meet-ace">Meet ACE</Link>
             </div>
@@ -866,6 +878,40 @@ export default function HomePage() {
         .ace-scene__orbit--inner { width:340px; height:340px; max-width:80%; border:1px solid rgba(103,95,166,.11); }
 
         .ace-scene__center { position:absolute; top:87px; left:50%; z-index:3; width:285px; transform:translateX(-50%); }
+
+        /* The CTA is relative to .ace-scene__center, not to the viewport. */
+        .ace-scene__get-started {
+          position:relative; z-index:6;
+          display:flex; align-items:center; justify-content:space-between; gap:14px;
+          width:min(82%,220px); min-height:49px;
+          margin:-18px auto 0; padding:7px 7px 7px 23px;
+          border:2px solid rgba(255,255,255,.97); border-radius:100px;
+          background:linear-gradient(110deg,#b64074 0%,#9773c4 52%,#3558ae 100%);
+          background-size:180% 180%;
+          color:#fff; font-size:13px; font-weight:850; letter-spacing:.015em;
+          text-decoration:none; white-space:nowrap;
+          box-shadow:0 13px 27px rgba(90,75,162,.27),inset 0 1px 0 rgba(255,255,255,.24);
+          transition:transform .35s cubic-bezier(.22,1,.36,1),
+                     background-position .5s ease,box-shadow .35s ease;
+          will-change:transform;
+        }
+        .ace-scene__get-started:hover {
+          transform:translateY(-5px) scale(1.035);
+          background-position:100% 50%;
+          box-shadow:0 20px 35px rgba(90,75,162,.34),inset 0 1px 0 rgba(255,255,255,.35);
+        }
+        .ace-scene__get-started:active { transform:translateY(-1px) scale(.99); }
+        .ace-scene__get-started-icon {
+          display:grid; place-items:center; flex:none;
+          width:33px; height:33px; border-radius:50%;
+          background:rgba(255,255,255,.22); border:1px solid rgba(255,255,255,.29);
+          transition:transform .35s cubic-bezier(.22,1,.36,1),background .3s;
+        }
+        .ace-scene__get-started-icon svg { display:block; width:17px; height:17px; }
+        .ace-scene__get-started:hover .ace-scene__get-started-icon {
+          transform:translateX(2px) rotate(-10deg);
+          background:rgba(255,255,255,.33);
+        }
 
         .ace-scene__tilt { --ace-tilt-x:0deg; --ace-tilt-y:0deg; --ace-pointer-x:50%; --ace-pointer-y:50%; --ace-lift:0px; perspective:900px; touch-action:pan-y; }
 
@@ -945,7 +991,7 @@ export default function HomePage() {
 
         .ace-scene__languages { position:absolute; z-index:5; inset:0; pointer-events:none; }
 
-        .ace-scene__bubble { position:absolute; display:flex; align-items:center; gap:9px; width:170px; min-height:54px; padding:8px 10px; border:2px solid #2a255c; border-radius:14px; background:var(--bubble-bg,#fff8e9); box-shadow:3px 4px 0 #2a255c; color:#2a255c; text-decoration:none; pointer-events:auto; transform:rotate(var(--angle,0deg)); transition:transform .25s ease,box-shadow .25s ease; }
+        .ace-scene__bubble { cursor: default; position:absolute; display:flex; align-items:center; gap:9px; width:170px; min-height:54px; padding:8px 10px; border:2px solid #2a255c; border-radius:14px; background:var(--bubble-bg,#fff8e9); box-shadow:3px 4px 0 #2a255c; color:#2a255c; text-decoration:none; pointer-events:auto; transform:rotate(var(--angle,0deg)); transition:transform .25s ease,box-shadow .25s ease; }
 
         .ace-scene__bubble:hover { z-index:10; transform:translateY(-4px) rotate(0deg) scale(1.04); box-shadow:5px 6px 0 #2a255c; }
 
@@ -1335,7 +1381,7 @@ export default function HomePage() {
 
           .ace-scene__bubble:nth-child(2) { top:77px;right:1%; }
 
-          .ace-scene__bubble:nth-child(3) { top:422px;left:1%; }
+          .ace-scene__bubble:nth-child(3) { top:432px;left:1%; }
 
           .ace-scene__bubble:nth-child(4) { top:464px;right:1%; }
 
@@ -1382,7 +1428,7 @@ export default function HomePage() {
 
           .ace-scene__portrait { width:155px; }.ace-scene__bubble:nth-child(1) { top:5px; }.ace-scene__bubble:nth-child(2) { top:63px; }
 
-          .ace-scene__bubble:nth-child(3) { top:365px; }.ace-scene__bubble:nth-child(4) { top:405px; }
+          .ace-scene__bubble:nth-child(3) { top:387px; }.ace-scene__bubble:nth-child(4) { top:405px; }
 
         }
 
@@ -1427,6 +1473,10 @@ export default function HomePage() {
         .ace-scene__bubble:nth-child(6) { animation-delay:.82s; }
         .ace-scene__bubble:nth-child(7) { animation-delay:.92s; }
         .ace-scene__bubble:nth-child(8) { animation-delay:1.02s; }
+
+        .ace-scene__get-started {
+          animation:ace-enter-rise .68s cubic-bezier(.22,1,.36,1) .84s both;
+        }
 
         .ace-scene__explore {
           animation:ace-enter-rise .72s cubic-bezier(.22,1,.36,1) 1.1s both;
