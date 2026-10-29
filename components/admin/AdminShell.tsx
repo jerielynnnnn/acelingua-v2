@@ -6,6 +6,7 @@ import { BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, Gamepad2, Globe2, 
 import { lessonHref, routeTitle } from "@/lib/admin/navigation";
 const navigation = [
   ["", "Curriculum Studio", BookOpen], ["builder", "Courses & Languages", Globe2],
+  ["ai-course", "AI Course Creator", Globe2],
   ["roadmap", "Unit & Lesson Roadmap", Layers3], ["lesson-editor", "Lesson Content", PencilLine],
   ["activities", "Activities & Assessments", Gamepad2], ["review", "Review & Publishing", ClipboardCheck],
 ] as const;

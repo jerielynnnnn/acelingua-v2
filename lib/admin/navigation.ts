@@ -3,6 +3,7 @@ export const studioGroups = [
     title: "Curriculum Management", description: "Organize languages, courses, units, and lesson outlines.", tools: [
       ["builder", "Courses & Languages", "Manage languages and course structures."],
       ["roadmap", "Unit & Lesson Roadmap", "Arrange units and lesson sequences."],
+      ["ai-course", "AI Course Creator", "Generate and review a complete multilingual beginner course."],
       ["ai", "AI Curriculum Generator", "Draft outlines with local Ollama."],
     ]
   },

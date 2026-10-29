@@ -1,0 +1,621 @@
+
+-- ============================================================
+-- ACELINGUA V2
+-- PHASE 3E.5.3 — IMMUTABLE ASSESSMENT SNAPSHOTS
+--
+-- Preserves existing:
+--   - Knowledge Check attempts
+--   - Lesson completions
+--   - XP and coins
+--
+-- Requires Phase 3E.5.1 and 3E.5.2.
+-- ============================================================
+
+BEGIN;
+
+-- ============================================================
+-- 1. CHECK DEPENDENCIES
+-- ============================================================
+
+DO $$
+BEGIN
+  IF to_regprocedure(
+    'private.can_access_published_lesson(uuid)'
+  ) IS NULL
+  OR to_regclass(
+    'public.published_lesson_snapshots'
+  ) IS NULL
+  OR to_regclass(
+    'public.ai_assessment_drafts'
+  ) IS NULL
+  OR to_regclass(
+    'public.learner_knowledge_check_attempts'
+  ) IS NULL
+  THEN
+    RAISE EXCEPTION
+      'Required Phase 3E tables/functions are missing';
+  END IF;
+END;
+$$;
+
+-- ============================================================
+-- 2. CREATE PROTECTED, VERSIONED ASSESSMENT STORAGE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS
+  public.published_assessment_snapshots (
+    lesson_id uuid NOT NULL
+      REFERENCES public.lessons(id)
+      ON DELETE RESTRICT,
+
+    approval_fingerprint text NOT NULL,
+
+    questions jsonb NOT NULL
+      CHECK (jsonb_typeof(questions) = 'array'),
+
+    captured_at timestamptz NOT NULL
+      DEFAULT now(),
+
+    CONSTRAINT published_assessment_snapshots_pkey
+      PRIMARY KEY (
+        lesson_id,
+        approval_fingerprint
+      )
+  );
+
+CREATE INDEX IF NOT EXISTS
+  published_assessment_snapshots_lesson_idx
+ON public.published_assessment_snapshots (
+  lesson_id
+);
+
+ALTER TABLE public.published_assessment_snapshots
+ENABLE ROW LEVEL SECURITY;
+
+-- No direct learner/admin-client access.
+-- Trusted SECURITY DEFINER functions own access.
+REVOKE ALL ON
+  public.published_assessment_snapshots
+FROM PUBLIC, anon, authenticated;
+
+-- ============================================================
+-- 3. PREVENT CHANGING A FROZEN SNAPSHOT
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION
+  private.prevent_assessment_snapshot_changes()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $function$
+BEGIN
+  RAISE EXCEPTION
+    'Published assessment snapshots are immutable';
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS
+  acelingua_assessment_snapshot_immutable
+ON public.published_assessment_snapshots;
+
+CREATE TRIGGER
+  acelingua_assessment_snapshot_immutable
+BEFORE UPDATE OR DELETE
+ON public.published_assessment_snapshots
+FOR EACH ROW
+EXECUTE FUNCTION
+  private.prevent_assessment_snapshot_changes();
+
+-- ============================================================
+-- 4. CAPTURE THE ASSESSMENT ON PUBLICATION
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION
+  private.capture_published_assessment()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_questions jsonb;
+BEGIN
+  IF NEW.status <> 'published' THEN
+    RETURN NEW;
+  END IF;
+
+  -- An existing version must never be overwritten.
+  IF EXISTS (
+    SELECT 1
+    FROM public.published_assessment_snapshots a
+    WHERE a.lesson_id = NEW.lesson_id
+      AND a.approval_fingerprint =
+        NEW.approval_fingerprint
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT a.questions
+  INTO v_questions
+  FROM public.ai_assessment_drafts a
+  WHERE a.lesson_id = NEW.lesson_id
+    AND a.status IN ('draft', 'approved');
+
+  IF jsonb_typeof(v_questions)
+     IS DISTINCT FROM 'array'
+     OR jsonb_array_length(v_questions)
+        NOT BETWEEN 3 AND 5
+  THEN
+    RAISE EXCEPTION
+      'A valid Knowledge Check is required for publication';
+  END IF;
+
+  -- New approval fingerprint = new frozen version.
+  INSERT INTO public.published_assessment_snapshots (
+    lesson_id,
+    approval_fingerprint,
+    questions
+  )
+  VALUES (
+    NEW.lesson_id,
+    NEW.approval_fingerprint,
+    v_questions
+  )
+  ON CONFLICT (
+    lesson_id,
+    approval_fingerprint
+  ) DO NOTHING;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS
+  acelingua_capture_published_assessment
+ON public.published_lesson_snapshots;
+
+CREATE TRIGGER
+  acelingua_capture_published_assessment
+AFTER INSERT OR UPDATE
+ON public.published_lesson_snapshots
+FOR EACH ROW
+EXECUTE FUNCTION
+  private.capture_published_assessment();
+
+-- ============================================================
+-- 5. BACKFILL CURRENT PUBLISHED LESSONS
+-- ============================================================
+
+-- Capture the current draft once for existing published
+-- lessons. Historical grading versions cannot be
+-- reconstructed without historical source data.
+
+INSERT INTO public.published_assessment_snapshots (
+  lesson_id,
+  approval_fingerprint,
+  questions
+)
+SELECT
+  s.lesson_id,
+  s.approval_fingerprint,
+  a.questions
+FROM public.published_lesson_snapshots s
+JOIN public.ai_assessment_drafts a
+  ON a.lesson_id = s.lesson_id
+WHERE s.status = 'published'
+  AND a.status IN ('draft', 'approved')
+  AND jsonb_typeof(a.questions) = 'array'
+  AND jsonb_array_length(a.questions)
+    BETWEEN 3 AND 5
+ON CONFLICT (
+  lesson_id,
+  approval_fingerprint
+) DO NOTHING;
+
+-- Abort if a published lesson has no frozen assessment.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.published_lesson_snapshots s
+    WHERE s.status = 'published'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.published_assessment_snapshots a
+        WHERE a.lesson_id = s.lesson_id
+          AND a.approval_fingerprint =
+            s.approval_fingerprint
+      )
+  ) THEN
+    RAISE EXCEPTION
+      'Published lesson without an assessment snapshot';
+  END IF;
+END;
+$$;
+
+-- ============================================================
+-- 6. INTERNAL FUNCTION: READ CURRENT FROZEN VERSION
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION
+  private.get_published_assessment_questions(
+    p_lesson_id uuid
+  )
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_questions jsonb;
+BEGIN
+  -- The version is chosen by the current live
+  -- publication fingerprint, not by draft status.
+  SELECT a.questions
+  INTO v_questions
+  FROM public.published_lesson_snapshots s
+  JOIN public.published_assessment_snapshots a
+    ON a.lesson_id = s.lesson_id
+   AND a.approval_fingerprint =
+       s.approval_fingerprint
+  WHERE s.lesson_id = p_lesson_id
+    AND s.status = 'published';
+
+  IF v_questions IS NULL THEN
+    RAISE EXCEPTION
+      'Published Knowledge Check not available';
+  END IF;
+
+  RETURN v_questions;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+  private.get_published_assessment_questions(uuid)
+FROM PUBLIC, anon, authenticated;
+
+-- ============================================================
+-- 7. REPLACE SAFE KNOWLEDGE CHECK RETRIEVAL
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION
+  public.get_published_knowledge_check(
+    p_lesson_id uuid
+  )
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_user_id uuid;
+  v_questions jsonb;
+  v_safe jsonb;
+  v_previous record;
+  v_question jsonb;
+  v_options jsonb;
+  v_total integer;
+  v_index integer;
+BEGIN
+  v_user_id := auth.uid();
+
+  IF v_user_id IS NULL
+     OR private.is_admin()
+  THEN
+    RAISE EXCEPTION
+      'Learner access required'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF NOT private.can_access_published_lesson(
+    p_lesson_id
+  ) THEN
+    RAISE EXCEPTION
+      'Lesson is unavailable or locked'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Return the saved result for completed attempts.
+  SELECT
+    a.question_count,
+    a.correct_count,
+    a.score,
+    a.submitted_at
+  INTO v_previous
+  FROM public.learner_knowledge_check_attempts a
+  WHERE a.lesson_id = p_lesson_id
+    AND a.user_id = v_user_id;
+
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'attempted', true,
+      'question_count', v_previous.question_count,
+      'correct_count', v_previous.correct_count,
+      'score', v_previous.score,
+      'submitted_at', v_previous.submitted_at
+    );
+  END IF;
+
+  -- The editable draft is NEVER queried here.
+  v_questions :=
+    private.get_published_assessment_questions(
+      p_lesson_id
+    );
+
+  v_total := jsonb_array_length(v_questions);
+
+  IF v_total NOT BETWEEN 3 AND 5 THEN
+    RAISE EXCEPTION
+      'Invalid published assessment';
+  END IF;
+
+  FOR v_index IN 0..(v_total - 1) LOOP
+    v_question := v_questions->v_index;
+    v_options := v_question->'options';
+
+    IF jsonb_typeof(v_question) <> 'object'
+       OR NULLIF(
+         btrim(v_question->>'prompt'), ''
+       ) IS NULL
+       OR jsonb_typeof(v_options) <> 'array'
+       OR jsonb_array_length(v_options) < 2
+       OR jsonb_typeof(
+         v_question->'correct_answer'
+       ) <> 'string'
+    THEN
+      RAISE EXCEPTION
+        'Invalid published assessment question';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(v_options)
+        AS option_entry(value)
+      WHERE jsonb_typeof(
+        option_entry.value
+      ) <> 'string'
+    ) THEN
+      RAISE EXCEPTION
+        'Invalid published options';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(v_options)
+        AS option_text(answer)
+      WHERE option_text.answer =
+        v_question->>'correct_answer'
+    ) THEN
+      RAISE EXCEPTION
+        'Invalid published answer configuration';
+    END IF;
+  END LOOP;
+
+  -- Explicitly expose only safe properties.
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'id', (q.ordinality - 1)::integer,
+      'prompt', q.value->>'prompt',
+      'options', q.value->'options'
+    )
+    ORDER BY q.ordinality
+  )
+  INTO v_safe
+  FROM jsonb_array_elements(v_questions)
+    WITH ORDINALITY AS q(value, ordinality);
+
+  RETURN jsonb_build_object(
+    'attempted', false,
+    'title', 'Knowledge Check',
+    'questions', v_safe
+  );
+END;
+$function$;
+
+-- ============================================================
+-- 8. REPLACE SECURE KNOWLEDGE CHECK SUBMISSION
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION
+  public.submit_published_knowledge_check(
+    p_lesson_id uuid,
+    p_answers jsonb
+  )
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_user_id uuid;
+  v_questions jsonb;
+  v_total integer;
+  v_correct integer := 0;
+  v_score integer;
+  v_index integer;
+  v_question jsonb;
+  v_options jsonb;
+  v_expected text;
+  v_selected text;
+  v_rows integer;
+BEGIN
+  v_user_id := auth.uid();
+
+  IF v_user_id IS NULL
+     OR private.is_admin()
+  THEN
+    RAISE EXCEPTION
+      'Learner access required'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Cannot submit via direct RPC for a locked lesson.
+  IF NOT private.can_access_published_lesson(
+    p_lesson_id
+  ) THEN
+    RAISE EXCEPTION
+      'Lesson is unavailable or locked'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- One submission per learner per lesson.
+  IF EXISTS (
+    SELECT 1
+    FROM public.learner_knowledge_check_attempts a
+    WHERE a.user_id = v_user_id
+      AND a.lesson_id = p_lesson_id
+  ) THEN
+    RAISE EXCEPTION
+      'Knowledge Check already submitted';
+  END IF;
+
+  IF jsonb_typeof(p_answers) <> 'array'
+  THEN
+    RAISE EXCEPTION
+      'Answers must be an array';
+  END IF;
+
+  -- Grade the exact version captured at publication.
+  v_questions :=
+    private.get_published_assessment_questions(
+      p_lesson_id
+    );
+
+  v_total := jsonb_array_length(v_questions);
+
+  IF v_total NOT BETWEEN 3 AND 5
+     OR jsonb_array_length(p_answers) <> v_total
+  THEN
+    RAISE EXCEPTION
+      'Submit exactly one answer per question';
+  END IF;
+
+  FOR v_index IN 0..(v_total - 1) LOOP
+    v_question := v_questions->v_index;
+    v_options := v_question->'options';
+
+    IF jsonb_typeof(v_question) <> 'object'
+       OR NULLIF(
+         btrim(v_question->>'prompt'), ''
+       ) IS NULL
+       OR jsonb_typeof(v_options) <> 'array'
+       OR jsonb_array_length(v_options) < 2
+       OR jsonb_typeof(
+         v_question->'correct_answer'
+       ) <> 'string'
+    THEN
+      RAISE EXCEPTION
+        'Invalid published assessment question';
+    END IF;
+
+    v_expected := v_question->>'correct_answer';
+
+    IF EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(v_options)
+        AS entry(value)
+      WHERE jsonb_typeof(entry.value) <> 'string'
+    )
+    OR NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(v_options)
+        AS option_text(answer)
+      WHERE option_text.answer = v_expected
+    ) THEN
+      RAISE EXCEPTION
+        'Invalid saved answer configuration';
+    END IF;
+
+    IF jsonb_typeof(p_answers->v_index)
+       <> 'string'
+    THEN
+      RAISE EXCEPTION
+        'Invalid answer format';
+    END IF;
+
+    v_selected := p_answers->>v_index;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(v_options)
+        AS option_text(answer)
+      WHERE option_text.answer = v_selected
+    ) THEN
+      RAISE EXCEPTION
+        'Submitted answer is not a valid option';
+    END IF;
+
+    IF v_selected = v_expected THEN
+      v_correct := v_correct + 1;
+    END IF;
+  END LOOP;
+
+  v_score := round(
+    (v_correct::numeric / v_total::numeric) * 100
+  )::integer;
+
+  INSERT INTO public.learner_knowledge_check_attempts (
+    user_id,
+    lesson_id,
+    submitted_answers,
+    question_count,
+    correct_count,
+    score
+  )
+  VALUES (
+    v_user_id,
+    p_lesson_id,
+    p_answers,
+    v_total,
+    v_correct,
+    v_score
+  )
+  ON CONFLICT (
+    user_id,
+    lesson_id
+  ) DO NOTHING;
+
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION
+      'Knowledge Check already submitted';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'attempted', true,
+    'question_count', v_total,
+    'correct_count', v_correct,
+    'score', v_score
+  );
+END;
+$function$;
+
+-- ============================================================
+-- 9. FUNCTION PERMISSIONS
+-- ============================================================
+
+REVOKE ALL ON FUNCTION
+  public.get_published_knowledge_check(uuid)
+FROM PUBLIC, anon;
+
+REVOKE ALL ON FUNCTION
+  public.submit_published_knowledge_check(
+    uuid, jsonb
+  )
+FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION
+  public.get_published_knowledge_check(uuid)
+TO authenticated;
+
+GRANT EXECUTE ON FUNCTION
+  public.submit_published_knowledge_check(
+    uuid, jsonb
+  )
+TO authenticated;
+
+COMMIT;
+
+NOTIFY pgrst, 'reload schema';
