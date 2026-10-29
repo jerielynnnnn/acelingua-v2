@@ -94,7 +94,7 @@ function LanguageBubble({ language }: { language: (typeof languages)[number] }) 
 
   return (
 
-    <Link href="/languages" className={`ace-scene__bubble ace-scene__bubble--${language.theme}`}
+    <Link href="" className={`ace-scene__bubble ace-scene__bubble--${language.theme}`}
 
       aria-label={`Explore ${language.name}`}>
 
@@ -206,6 +206,18 @@ function InteractiveAceCard() {
 
       </div>
 
+      {/* Attached to the ACE card, without affecting its 3D tilt. */}
+      <Link
+        href="/onboarding"
+        className="ace-scene__get-started"
+        aria-label="Get started with ACELINGUA — choose a language"
+      >
+        <span>Get Started</span>
+        <span className="ace-scene__get-started-icon" aria-hidden="true">
+          <Arrow />
+        </span>
+      </Link>
+
     </div>
 
   );
@@ -238,7 +250,7 @@ function LandingHero() {
 
         </div>
 
-        <Link href="/languages" className="ace-scene__explore">View Languages <Arrow /></Link>
+        <Link href="/onboarding" className="ace-scene__explore">View Languages <Arrow /></Link>
 
       </div>
 
@@ -720,7 +732,61 @@ function BackToTop() {
 
 export default function HomePage() {
 
+  useEffect(() => {
+    // Animate secondary content as it reaches the viewport.
+    // The first-fold hero uses a timed CSS-only stagger on page entry.
+    if (
+      typeof window === "undefined" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      !("IntersectionObserver" in window)
+    ) {
+      return;
+    }
 
+    const selector = [
+      ".ace-cinema__heading",
+      ".ace-cinema__theater",
+      ".ace-cinema__step",
+      ".ace-about__eyebrow",
+      ".ace-about__heading",
+      ".ace-about__description",
+      ".ace-about__promise",
+      ".ace-about__visual",
+      ".ace-langline__intro",
+      ".ace-langline__item",
+      ".ace-benefits__heading",
+      ".ace-benefits__item",
+      ".ace-footer__identity",
+      ".ace-footer__nav-group",
+    ].join(", ");
+
+    const elements = document.querySelectorAll<HTMLElement>(
+      `.ace-home ${selector.split(", ").join(", .ace-home ")}`
+    );
+
+    const observer = new IntersectionObserver(
+      (entries, currentObserver) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add("ace-is-visible");
+          currentObserver.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -6% 0px" }
+    );
+
+    elements.forEach((element) => {
+      element.classList.add("ace-scroll-reveal");
+      observer.observe(element);
+    });
+
+    return () => {
+      observer.disconnect();
+      elements.forEach((element) => {
+        element.classList.remove("ace-scroll-reveal", "ace-is-visible");
+      });
+    };
+  }, []);
 
   return (
 
@@ -755,7 +821,7 @@ export default function HomePage() {
           <nav className="ace-footer__nav" aria-label="Footer navigation">
             <div className="ace-footer__nav-group">
               <h3>EXPLORE</h3>
-              <Link href="/languages">Languages</Link>
+              <Link href="">Languages</Link>
               <Link href="/#how-it-works">How it works</Link>
               <Link href="/#meet-ace">Meet ACE</Link>
             </div>
@@ -812,6 +878,40 @@ export default function HomePage() {
         .ace-scene__orbit--inner { width:340px; height:340px; max-width:80%; border:1px solid rgba(103,95,166,.11); }
 
         .ace-scene__center { position:absolute; top:87px; left:50%; z-index:3; width:285px; transform:translateX(-50%); }
+
+        /* The CTA is relative to .ace-scene__center, not to the viewport. */
+        .ace-scene__get-started {
+          position:relative; z-index:6;
+          display:flex; align-items:center; justify-content:space-between; gap:14px;
+          width:min(82%,220px); min-height:49px;
+          margin:-18px auto 0; padding:7px 7px 7px 23px;
+          border:2px solid rgba(255,255,255,.97); border-radius:100px;
+          background:linear-gradient(110deg,#b64074 0%,#9773c4 52%,#3558ae 100%);
+          background-size:180% 180%;
+          color:#fff; font-size:13px; font-weight:850; letter-spacing:.015em;
+          text-decoration:none; white-space:nowrap;
+          box-shadow:0 13px 27px rgba(90,75,162,.27),inset 0 1px 0 rgba(255,255,255,.24);
+          transition:transform .35s cubic-bezier(.22,1,.36,1),
+                     background-position .5s ease,box-shadow .35s ease;
+          will-change:transform;
+        }
+        .ace-scene__get-started:hover {
+          transform:translateY(-5px) scale(1.035);
+          background-position:100% 50%;
+          box-shadow:0 20px 35px rgba(90,75,162,.34),inset 0 1px 0 rgba(255,255,255,.35);
+        }
+        .ace-scene__get-started:active { transform:translateY(-1px) scale(.99); }
+        .ace-scene__get-started-icon {
+          display:grid; place-items:center; flex:none;
+          width:33px; height:33px; border-radius:50%;
+          background:rgba(255,255,255,.22); border:1px solid rgba(255,255,255,.29);
+          transition:transform .35s cubic-bezier(.22,1,.36,1),background .3s;
+        }
+        .ace-scene__get-started-icon svg { display:block; width:17px; height:17px; }
+        .ace-scene__get-started:hover .ace-scene__get-started-icon {
+          transform:translateX(2px) rotate(-10deg);
+          background:rgba(255,255,255,.33);
+        }
 
         .ace-scene__tilt { --ace-tilt-x:0deg; --ace-tilt-y:0deg; --ace-pointer-x:50%; --ace-pointer-y:50%; --ace-lift:0px; perspective:900px; touch-action:pan-y; }
 
@@ -891,7 +991,7 @@ export default function HomePage() {
 
         .ace-scene__languages { position:absolute; z-index:5; inset:0; pointer-events:none; }
 
-        .ace-scene__bubble { position:absolute; display:flex; align-items:center; gap:9px; width:170px; min-height:54px; padding:8px 10px; border:2px solid #2a255c; border-radius:14px; background:var(--bubble-bg,#fff8e9); box-shadow:3px 4px 0 #2a255c; color:#2a255c; text-decoration:none; pointer-events:auto; transform:rotate(var(--angle,0deg)); transition:transform .25s ease,box-shadow .25s ease; }
+        .ace-scene__bubble { cursor: default; position:absolute; display:flex; align-items:center; gap:9px; width:170px; min-height:54px; padding:8px 10px; border:2px solid #2a255c; border-radius:14px; background:var(--bubble-bg,#fff8e9); box-shadow:3px 4px 0 #2a255c; color:#2a255c; text-decoration:none; pointer-events:auto; transform:rotate(var(--angle,0deg)); transition:transform .25s ease,box-shadow .25s ease; }
 
         .ace-scene__bubble:hover { z-index:10; transform:translateY(-4px) rotate(0deg) scale(1.04); box-shadow:5px 6px 0 #2a255c; }
 
@@ -1281,7 +1381,7 @@ export default function HomePage() {
 
           .ace-scene__bubble:nth-child(2) { top:77px;right:1%; }
 
-          .ace-scene__bubble:nth-child(3) { top:422px;left:1%; }
+          .ace-scene__bubble:nth-child(3) { top:432px;left:1%; }
 
           .ace-scene__bubble:nth-child(4) { top:464px;right:1%; }
 
@@ -1328,11 +1428,97 @@ export default function HomePage() {
 
           .ace-scene__portrait { width:155px; }.ace-scene__bubble:nth-child(1) { top:5px; }.ace-scene__bubble:nth-child(2) { top:63px; }
 
-          .ace-scene__bubble:nth-child(3) { top:365px; }.ace-scene__bubble:nth-child(4) { top:405px; }
+          .ace-scene__bubble:nth-child(3) { top:387px; }.ace-scene__bubble:nth-child(4) { top:405px; }
 
         }
 
         @media (hover:none) { .ace-scene__card { transform:none !important; }.ace-scene__card-glare { opacity:0 !important; } }
+
+        /* ============================================================
+           SMOOTH ENTRANCE ANIMATIONS
+           1. First fold: staged fade + rise + soft scale + blur
+           2. Remaining sections: one-time scroll reveal
+           Individual translate/scale properties preserve existing
+           rotations, centered positioning, and interactive 3D tilt.
+           ============================================================ */
+
+        @keyframes ace-enter-rise {
+          0% { opacity:0; translate:0 25px; scale:.94; filter:blur(7px); }
+          65% { opacity:1; filter:blur(0); }
+          100% { opacity:1; translate:0 0; scale:1; filter:blur(0); }
+        }
+
+        @keyframes ace-enter-fade {
+          from { opacity:0; }
+          to { opacity:1; }
+        }
+
+        .ace-scene__glow { animation:ace-enter-fade 1s ease .05s both; }
+        .ace-scene__orbit--outer { animation:ace-enter-fade 1.1s ease .15s both; }
+        .ace-scene__orbit--inner { animation:ace-enter-fade 1.1s ease .25s both; }
+
+        /* Animate the centered wrapper, not the tilt card itself. */
+        .ace-scene__center {
+          animation:ace-enter-rise .82s cubic-bezier(.22,1,.36,1) .12s both;
+        }
+
+        .ace-scene__bubble {
+          animation:ace-enter-rise .68s cubic-bezier(.22,1,.36,1) both;
+        }
+        .ace-scene__bubble:nth-child(1) { animation-delay:.32s; }
+        .ace-scene__bubble:nth-child(2) { animation-delay:.42s; }
+        .ace-scene__bubble:nth-child(3) { animation-delay:.52s; }
+        .ace-scene__bubble:nth-child(4) { animation-delay:.62s; }
+        .ace-scene__bubble:nth-child(5) { animation-delay:.72s; }
+        .ace-scene__bubble:nth-child(6) { animation-delay:.82s; }
+        .ace-scene__bubble:nth-child(7) { animation-delay:.92s; }
+        .ace-scene__bubble:nth-child(8) { animation-delay:1.02s; }
+
+        .ace-scene__get-started {
+          animation:ace-enter-rise .68s cubic-bezier(.22,1,.36,1) .84s both;
+        }
+
+        .ace-scene__explore {
+          animation:ace-enter-rise .72s cubic-bezier(.22,1,.36,1) 1.1s both;
+        }
+
+        /* Secondary sections only reveal when scrolled into view. */
+        .ace-home .ace-scroll-reveal {
+          opacity:0;
+          translate:0 22px;
+          scale:.985;
+          filter:blur(5px);
+          transition:
+            opacity .7s cubic-bezier(.22,1,.36,1),
+            translate .7s cubic-bezier(.22,1,.36,1),
+            scale .7s cubic-bezier(.22,1,.36,1),
+            filter .7s ease;
+        }
+        .ace-home .ace-scroll-reveal.ace-is-visible {
+          opacity:1;
+          translate:0 0;
+          scale:1;
+          filter:blur(0);
+        }
+        .ace-cinema__step:nth-child(2),
+        .ace-benefits__item:nth-child(2),
+        .ace-footer__nav-group:nth-child(2) { transition-delay:80ms; }
+        .ace-cinema__step:nth-child(3),
+        .ace-benefits__item:nth-child(3),
+        .ace-footer__nav-group:nth-child(3) { transition-delay:160ms; }
+        .ace-langline__item:nth-child(4n + 2) { transition-delay:65ms; }
+        .ace-langline__item:nth-child(4n + 3) { transition-delay:130ms; }
+        .ace-langline__item:nth-child(4n + 4) { transition-delay:195ms; }
+
+        /* Do not leave content invisible for users who disable motion. */
+        @media (prefers-reduced-motion:reduce) {
+          .ace-home .ace-scroll-reveal {
+            opacity:1 !important;
+            translate:none !important;
+            scale:1 !important;
+            filter:none !important;
+          }
+        }
 
         @media (prefers-reduced-motion:reduce) {
 
