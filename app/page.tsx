@@ -238,7 +238,7 @@ function LandingHero() {
 
         </div>
 
-        <Link href="/languages" className="ace-scene__explore">View Languages <Arrow /></Link>
+        <Link href="/onboarding/languages" className="ace-scene__explore">View Languages <Arrow /></Link>
 
       </div>
 
@@ -720,7 +720,61 @@ function BackToTop() {
 
 export default function HomePage() {
 
+  useEffect(() => {
+    // Animate secondary content as it reaches the viewport.
+    // The first-fold hero uses a timed CSS-only stagger on page entry.
+    if (
+      typeof window === "undefined" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      !("IntersectionObserver" in window)
+    ) {
+      return;
+    }
 
+    const selector = [
+      ".ace-cinema__heading",
+      ".ace-cinema__theater",
+      ".ace-cinema__step",
+      ".ace-about__eyebrow",
+      ".ace-about__heading",
+      ".ace-about__description",
+      ".ace-about__promise",
+      ".ace-about__visual",
+      ".ace-langline__intro",
+      ".ace-langline__item",
+      ".ace-benefits__heading",
+      ".ace-benefits__item",
+      ".ace-footer__identity",
+      ".ace-footer__nav-group",
+    ].join(", ");
+
+    const elements = document.querySelectorAll<HTMLElement>(
+      `.ace-home ${selector.split(", ").join(", .ace-home ")}`
+    );
+
+    const observer = new IntersectionObserver(
+      (entries, currentObserver) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add("ace-is-visible");
+          currentObserver.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -6% 0px" }
+    );
+
+    elements.forEach((element) => {
+      element.classList.add("ace-scroll-reveal");
+      observer.observe(element);
+    });
+
+    return () => {
+      observer.disconnect();
+      elements.forEach((element) => {
+        element.classList.remove("ace-scroll-reveal", "ace-is-visible");
+      });
+    };
+  }, []);
 
   return (
 
@@ -1333,6 +1387,88 @@ export default function HomePage() {
         }
 
         @media (hover:none) { .ace-scene__card { transform:none !important; }.ace-scene__card-glare { opacity:0 !important; } }
+
+        /* ============================================================
+           SMOOTH ENTRANCE ANIMATIONS
+           1. First fold: staged fade + rise + soft scale + blur
+           2. Remaining sections: one-time scroll reveal
+           Individual translate/scale properties preserve existing
+           rotations, centered positioning, and interactive 3D tilt.
+           ============================================================ */
+
+        @keyframes ace-enter-rise {
+          0% { opacity:0; translate:0 25px; scale:.94; filter:blur(7px); }
+          65% { opacity:1; filter:blur(0); }
+          100% { opacity:1; translate:0 0; scale:1; filter:blur(0); }
+        }
+
+        @keyframes ace-enter-fade {
+          from { opacity:0; }
+          to { opacity:1; }
+        }
+
+        .ace-scene__glow { animation:ace-enter-fade 1s ease .05s both; }
+        .ace-scene__orbit--outer { animation:ace-enter-fade 1.1s ease .15s both; }
+        .ace-scene__orbit--inner { animation:ace-enter-fade 1.1s ease .25s both; }
+
+        /* Animate the centered wrapper, not the tilt card itself. */
+        .ace-scene__center {
+          animation:ace-enter-rise .82s cubic-bezier(.22,1,.36,1) .12s both;
+        }
+
+        .ace-scene__bubble {
+          animation:ace-enter-rise .68s cubic-bezier(.22,1,.36,1) both;
+        }
+        .ace-scene__bubble:nth-child(1) { animation-delay:.32s; }
+        .ace-scene__bubble:nth-child(2) { animation-delay:.42s; }
+        .ace-scene__bubble:nth-child(3) { animation-delay:.52s; }
+        .ace-scene__bubble:nth-child(4) { animation-delay:.62s; }
+        .ace-scene__bubble:nth-child(5) { animation-delay:.72s; }
+        .ace-scene__bubble:nth-child(6) { animation-delay:.82s; }
+        .ace-scene__bubble:nth-child(7) { animation-delay:.92s; }
+        .ace-scene__bubble:nth-child(8) { animation-delay:1.02s; }
+
+        .ace-scene__explore {
+          animation:ace-enter-rise .72s cubic-bezier(.22,1,.36,1) 1.1s both;
+        }
+
+        /* Secondary sections only reveal when scrolled into view. */
+        .ace-home .ace-scroll-reveal {
+          opacity:0;
+          translate:0 22px;
+          scale:.985;
+          filter:blur(5px);
+          transition:
+            opacity .7s cubic-bezier(.22,1,.36,1),
+            translate .7s cubic-bezier(.22,1,.36,1),
+            scale .7s cubic-bezier(.22,1,.36,1),
+            filter .7s ease;
+        }
+        .ace-home .ace-scroll-reveal.ace-is-visible {
+          opacity:1;
+          translate:0 0;
+          scale:1;
+          filter:blur(0);
+        }
+        .ace-cinema__step:nth-child(2),
+        .ace-benefits__item:nth-child(2),
+        .ace-footer__nav-group:nth-child(2) { transition-delay:80ms; }
+        .ace-cinema__step:nth-child(3),
+        .ace-benefits__item:nth-child(3),
+        .ace-footer__nav-group:nth-child(3) { transition-delay:160ms; }
+        .ace-langline__item:nth-child(4n + 2) { transition-delay:65ms; }
+        .ace-langline__item:nth-child(4n + 3) { transition-delay:130ms; }
+        .ace-langline__item:nth-child(4n + 4) { transition-delay:195ms; }
+
+        /* Do not leave content invisible for users who disable motion. */
+        @media (prefers-reduced-motion:reduce) {
+          .ace-home .ace-scroll-reveal {
+            opacity:1 !important;
+            translate:none !important;
+            scale:1 !important;
+            filter:none !important;
+          }
+        }
 
         @media (prefers-reduced-motion:reduce) {
 
